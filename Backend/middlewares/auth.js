@@ -21,3 +21,37 @@ exports.isAuth = async (req, res, next) => {
         res.status(401).json({ success: false, message: 'Authentication failed' });
     }
 };
+
+// Role-based middleware
+exports.isAdmin = (req, res, next) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ 
+            success: false, 
+            message: 'Access denied: Admin role required' 
+        });
+    }
+    next();
+};
+
+exports.isGuide = (req, res, next) => {
+    if (req.user.role !== 'guide' && req.user.role !== 'admin') {
+        return res.status(403).json({ 
+            success: false, 
+            message: 'Access denied: Guide or Admin role required' 
+        });
+    }
+    next();
+};
+
+// Flexible role checker
+exports.hasRole = (roles) => {
+    return (req, res, next) => {
+        if (!roles.includes(req.user.role)) {
+            return res.status(403).json({ 
+                success: false, 
+                message: `Access denied: Required role not found` 
+            });
+        }
+        next();
+    };
+};

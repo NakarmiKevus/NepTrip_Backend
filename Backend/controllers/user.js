@@ -2,9 +2,40 @@ const jwt = require('jsonwebtoken');
 const User = require('../Models/User');
 const { cloudinary } = require('../Helper/imageUpload');
 
+// Create default admin and guide users on server startup
+exports.createDefaultUsers = async () => {
+    try {
+        // Check if admin already exists
+        const adminExists = await User.findOne({ role: 'admin' });
+        if (!adminExists) {
+            await User.create({
+                fullname: 'Admin User',
+                email: 'admin@neptrip.com',
+                password: 'admin123',
+                role: 'admin'
+            });
+            console.log('✅ Default admin user created');
+        }
+
+        // Check if guide already exists
+        const guideExists = await User.findOne({ role: 'guide' });
+        if (!guideExists) {
+            await User.create({
+                fullname: 'Guide User',
+                email: 'guide@neptrip.com',
+                password: 'guide123',
+                role: 'guide'
+            });
+            console.log('✅ Default guide user created');
+        }
+    } catch (error) {
+        console.error('❌ Error creating default users:', error);
+    }
+};
+
 exports.createUser = async (req, res) => {
     try {
-        const { fullname, email, password } = req.body;
+        const { fullname, email, password, role } = req.body;
         console.log('Received signup request:', { fullname, email });
 
         const exists = await User.findOne({ email });
@@ -12,12 +43,24 @@ exports.createUser = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Email already exists' });
         }
 
-        const user = await User.create({ fullname, email, password });
+        // Only allow admin to create guide or admin accounts
+        const requestingUser = req.user;
+        if (role && (role === 'admin' || role === 'guide')) {
+            if (!requestingUser || requestingUser.role !== 'admin') {
+                return res.status(403).json({ 
+                    success: false, 
+                    message: 'Unauthorized: Only admins can create admin or guide accounts' 
+                });
+            }
+        }
+
+        // Default role is 'user' as defined in schema
+        const user = await User.create({ fullname, email, password, role });
         console.log('User created successfully:', user._id);
 
         res.status(201).json({
             success: true,
-            user: { id: user._id, fullname, email }
+            user: { id: user._id, fullname, email, role: user.role }
         });
     } catch (error) {
         console.error('Error creating user:', error);
@@ -39,7 +82,11 @@ exports.userSignIn = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Invalid credentials' });
         }
 
-        const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '1d' });
+        const token = jwt.sign(
+            { userId: user._id, role: user.role }, 
+            process.env.JWT_SECRET, 
+            { expiresIn: '1d' }
+        );
 
         const userInfo = {
             fullname: user.fullname,
@@ -47,18 +94,34 @@ exports.userSignIn = async (req, res) => {
             avatar: user.avatar || '',
             phoneNumber: user.phoneNumber || '',
             address: user.address || '',
+            role: user.role
         };
+
+        // Determine redirect URL based on role
+        let redirectUrl;
+        switch (user.role) {
+            case 'admin':
+                redirectUrl = 'AdminDashboard';
+                break;
+            case 'guide':
+                redirectUrl = 'GuideDashboard';
+                break;
+            default:
+                redirectUrl = 'Dashboard';
+        }
 
         res.json({
             success: true,
             token,
-            user: userInfo
+            user: userInfo,
+            redirectUrl
         });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
+// Rest of your code (uploadProfile, getUserProfile, updateUserProfile) remains the same
 exports.uploadProfile = async (req, res) => {
     try {
         if (!req.file) {
@@ -107,9 +170,10 @@ exports.getUserProfile = async (req, res) => {
             user: {
                 fullname: user.fullname,
                 email: user.email,
-                avatar: user.avatar || '',  // Avatar URL if available
+                avatar: user.avatar || '',
                 phoneNumber: user.phoneNumber || '',
-                address: user.address || ''
+                address: user.address || '',
+                role: user.role
             }
         });
     } catch (error) {
@@ -118,7 +182,6 @@ exports.getUserProfile = async (req, res) => {
     }
 };
 
-// New controller function for updating user profile
 exports.updateUserProfile = async (req, res) => {
     try {
         const user_id = req.user._id;
@@ -170,7 +233,8 @@ exports.updateUserProfile = async (req, res) => {
                 email: updatedUser.email,
                 avatar: updatedUser.avatar || '',
                 phoneNumber: updatedUser.phoneNumber || '',
-                address: updatedUser.address || ''
+                address: updatedUser.address || '',
+                role: updatedUser.role
             }
         });
         

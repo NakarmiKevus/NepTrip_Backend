@@ -10,12 +10,19 @@ app.use(express.json());
 
 // Import routes
 const userRoutes = require('./Backend/routes/user');
+const userController = require('./Backend/controllers/user');
 
 // Use routes
 app.use('/api/user', userRoutes);
 
 // Database connection
 require('./Backend/Models/db');
+
+// Create default users after DB connection
+// Call this after the database is connected
+setTimeout(() => {
+    userController.createDefaultUsers();
+}, 2000);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
