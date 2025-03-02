@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
+const User = require('../Models/User');  // ✅ FIXED: Import User Model
 
 const { 
     createUser, 
@@ -9,9 +10,10 @@ const {
     getUserProfile, 
     updateUserProfile 
 } = require('../controllers/user');
-const { validateUserSignUp, userValidation, validateUserSignIn } = require('../middlewares/validation/user');
-const { isAuth, isAdmin, isGuide, hasRole } = require('../middlewares/auth');
 
+const { isAuth, isAdmin, isGuide } = require('../middlewares/auth');
+
+// Multer setup for file uploads
 const storage = multer.diskStorage({});
 const upload = multer({
     storage,
@@ -24,31 +26,27 @@ const upload = multer({
     }
 });
 
-// Public routes
-router.post('/create-user', validateUserSignUp, userValidation, createUser);
-router.post('/sign-in', validateUserSignIn, userValidation, userSignIn);
+// Public Routes
+router.post('/create-user', createUser);
+router.post('/sign-in', userSignIn);
 
-// Protected routes - all authenticated users
+// Protected Routes
 router.post('/upload-profile', isAuth, upload.single('profile'), uploadProfile);
 router.get('/profile', isAuth, getUserProfile);
 router.put('/update-profile', isAuth, upload.single('profile'), updateUserProfile);
 
-// Admin-only routes
-router.post('/create-admin', isAuth, isAdmin, validateUserSignUp, userValidation, createUser);
-router.post('/create-guide', isAuth, isAdmin, validateUserSignUp, userValidation, createUser);
+// Admin-only Routes
+router.post('/create-admin', isAuth, isAdmin, createUser);
+router.post('/create-guide', isAuth, isAdmin, createUser);
 
-// Guide routes
-router.get('/guide-data', isAuth, isGuide, (req, res) => {
-    res.json({ success: true, message: 'Guide data accessed successfully' });
-});
-
-// Admin routes
+// ✅ FIXED: Fetch All Users (Admin Only)
 router.get('/all-users', isAuth, isAdmin, async (req, res) => {
     try {
-        const users = await User.find().select('-password');
+        const users = await User.find().select('-password');  // Exclude passwords
         res.json({ success: true, users });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        console.error('❌ Error fetching users:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
     }
 });
 

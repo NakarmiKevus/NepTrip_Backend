@@ -2,10 +2,10 @@ const jwt = require('jsonwebtoken');
 const User = require('../Models/User');
 const { cloudinary } = require('../Helper/imageUpload');
 
-// Create default admin and guide users on server startup
+
 exports.createDefaultUsers = async () => {
     try {
-        // Check if admin already exists
+
         const adminExists = await User.findOne({ role: 'admin' });
         if (!adminExists) {
             await User.create({
@@ -17,7 +17,7 @@ exports.createDefaultUsers = async () => {
             console.log('✅ Default admin user created');
         }
 
-        // Check if guide already exists
+
         const guideExists = await User.findOne({ role: 'guide' });
         if (!guideExists) {
             await User.create({
@@ -43,7 +43,7 @@ exports.createUser = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Email already exists' });
         }
 
-        // Only allow admin to create guide or admin accounts
+
         const requestingUser = req.user;
         if (role && (role === 'admin' || role === 'guide')) {
             if (!requestingUser || requestingUser.role !== 'admin') {
@@ -54,7 +54,7 @@ exports.createUser = async (req, res) => {
             }
         }
 
-        // Default role is 'user' as defined in schema
+
         const user = await User.create({ fullname, email, password, role });
         console.log('User created successfully:', user._id);
 
@@ -97,7 +97,7 @@ exports.userSignIn = async (req, res) => {
             role: user.role
         };
 
-        // Determine redirect URL based on role
+
         let redirectUrl;
         switch (user.role) {
             case 'admin':
@@ -121,7 +121,7 @@ exports.userSignIn = async (req, res) => {
     }
 };
 
-// Rest of your code (uploadProfile, getUserProfile, updateUserProfile) remains the same
+
 exports.uploadProfile = async (req, res) => {
     try {
         if (!req.file) {

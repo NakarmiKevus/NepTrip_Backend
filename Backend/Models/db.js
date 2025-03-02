@@ -8,5 +8,5 @@ const mongoose = require('mongoose');
     .then(() => console.log('✅ Database connected'))
     .catch(err => {
         console.error('❌ Database connection error:', err);
-        process.exit(1);  // Exit if database connection fails
+        process.exit(1);  
     });
