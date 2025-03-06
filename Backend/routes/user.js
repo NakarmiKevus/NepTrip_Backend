@@ -50,4 +50,40 @@ router.get('/all-users', isAuth, isAdmin, async (req, res) => {
     }
 });
 
+// Add delete user route (Admin Only)
+router.delete('/delete-user/:userId', isAuth, isAdmin, async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        // Check if user exists
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+        
+        // Prevent deleting the last admin
+        if (user.role === 'admin') {
+            const adminCount = await User.countDocuments({ role: 'admin' });
+            if (adminCount <= 1) {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: 'Cannot delete the last admin user' 
+                });
+            }
+        }
+        
+        // Delete the user
+        await User.findByIdAndDelete(userId);
+        
+        res.json({ 
+            success: true, 
+            message: 'User deleted successfully',
+            deletedId: userId 
+        });
+    } catch (error) {
+        console.error('❌ Error deleting user:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
 module.exports = router;
