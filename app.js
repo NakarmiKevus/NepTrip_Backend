@@ -8,12 +8,20 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+
+
+
+
 // Import routes
 const userRoutes = require('./Backend/routes/user');
 const userController = require('./Backend/controllers/user');
+const bookingRoutes = require('./Backend/routes/booking');
+
 
 // Use routes
 app.use('/api/user', userRoutes);
+app.use('/api/booking', bookingRoutes);
+
 
 // Database connection
 require('./Backend/Models/db');
