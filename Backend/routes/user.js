@@ -86,4 +86,15 @@ router.delete('/delete-user/:userId', isAuth, isAdmin, async (req, res) => {
     }
 });
 
+
+
+router.get('/guides', isAuth, async (req, res) => {
+  try {
+    const guides = await User.find({ role: 'guide' }).select('fullname email avatar');
+    res.json({ success: true, guides });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 module.exports = router;
