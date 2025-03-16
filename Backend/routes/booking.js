@@ -1,27 +1,20 @@
 const express = require('express');
 const router = express.Router();
-const { isAuth } = require('../middlewares/auth');
+const { isAuth, isUser, isGuide } = require('../middlewares/auth');
 const { 
     requestBooking, 
     getBookingRequests, 
     respondToBooking, 
     getUserBookings, 
-    getBookingStatus 
+    getBookingStatus,
+    getLatestBooking 
 } = require('../controllers/booking');
 
-// User requests a guide
-router.post('/request', isAuth, requestBooking);
-
-// Guide fetches requests
-router.get('/requests', isAuth, getBookingRequests);
-
-// Guide accepts/declines a request
-router.put('/respond/:bookingId', isAuth, respondToBooking);
-
-// User fetches their bookings
+router.post('/request', isAuth, isUser, requestBooking);
+router.get('/requests', isAuth, isGuide, getBookingRequests);
+router.put('/respond/:bookingId', isAuth, isGuide, respondToBooking);
 router.get('/user-bookings', isAuth, getUserBookings);
-
-// User fetches a specific booking status
 router.get('/status/:bookingId', isAuth, getBookingStatus);
+router.get('/latest-booking', isAuth, getLatestBooking);
 
 module.exports = router;
