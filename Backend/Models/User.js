@@ -8,6 +8,9 @@ const userSchema = new mongoose.Schema({
     avatar: String,
     phoneNumber: String,
     address: String,
+    language: String,
+    experience: String,
+    trekCount: { type: Number, default: 0 },
     role: { 
         type: String, 
         enum: ['user', 'guide', 'admin'],

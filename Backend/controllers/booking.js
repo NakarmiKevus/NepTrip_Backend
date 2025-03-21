@@ -48,11 +48,25 @@ exports.requestBooking = async (req, res) => {
 
 exports.getBookingRequests = async (req, res) => {
     try {
-        const guide = await User.findOne({ role: 'guide' });
-        if (!guide) return res.status(404).json({ success: false, message: 'Guide not found' });
+        const guideId = req.user._id;
 
-        const requests = await Booking.find({ guide: guide._id, status: 'pending' })
+        const requests = await Booking.find({ guide: guideId, status: 'pending' })
             .populate('user', 'fullname email');
+
+        res.json({ success: true, requests });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.getAllBookingRequests = async (req, res) => {
+    try {
+        const guideId = req.user._id;
+
+        // Find all bookings for this guide regardless of status
+        const requests = await Booking.find({ guide: guideId })
+            .populate('user', 'fullname email')
+            .sort({ createdAt: -1 });
 
         res.json({ success: true, requests });
     } catch (error) {
@@ -90,6 +104,46 @@ exports.respondToBooking = async (req, res) => {
         sendNotification(booking.user, `✅ Your booking request has been ${status}`);
 
         res.json({ success: true, message: `Booking ${status}!`, booking });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.completeTour = async (req, res) => {
+    try {
+        const { bookingId } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+            return res.status(400).json({ success: false, message: 'Invalid booking ID format' });
+        }
+
+        const booking = await Booking.findById(bookingId);
+        if (!booking) {
+            return res.status(404).json({ success: false, message: 'Booking not found' });
+        }
+
+        const guide = await User.findById(req.user._id);
+        if (!guide || guide.role !== 'guide') {
+            return res.status(403).json({ success: false, message: 'Unauthorized: Only guides can complete tours' });
+        }
+
+        // Only accepted bookings can be completed
+        if (booking.status !== 'accepted') {
+            return res.status(400).json({ success: false, message: 'Only accepted bookings can be completed' });
+        }
+
+        // Update the booking status to completed
+        booking.status = 'completed';
+        booking.completedAt = new Date();
+        await booking.save();
+
+        // Increment guide's trek count
+        await User.findByIdAndUpdate(guide._id, { $inc: { trekCount: 1 } });
+
+        // Send notification to user
+        sendNotification(booking.user, '✅ Your tour has been marked as completed!');
+
+        res.json({ success: true, message: 'Tour completed successfully', booking });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -137,6 +191,48 @@ exports.getLatestBooking = async (req, res) => {
         }
 
         res.json({ success: true, booking });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.searchBookings = async (req, res) => {
+    try {
+        const { status, search, sort } = req.query;
+        const guideId = req.user._id;
+
+        // Base query - find all bookings assigned to this guide
+        const query = { guide: guideId };
+
+        // Add status filter if provided
+        if (status && status !== 'all') {
+            query.status = status;
+        }
+
+        // Add search filter if provided
+        if (search) {
+            const searchRegex = new RegExp(search, 'i');
+            query.$or = [
+                { fullname: searchRegex },
+                { email: searchRegex },
+                { destination: searchRegex },
+                { date: searchRegex }
+            ];
+        }
+
+        // Determine sort order
+        let sortOptions = { createdAt: -1 }; // Default sort by newest
+        if (sort === 'oldest') {
+            sortOptions = { createdAt: 1 };
+        } else if (sort === 'name') {
+            sortOptions = { fullname: 1 };
+        }
+
+        const bookings = await Booking.find(query)
+            .sort(sortOptions)
+            .populate('user', 'fullname email');
+
+        res.json({ success: true, bookings });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

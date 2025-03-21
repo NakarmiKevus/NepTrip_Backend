@@ -1,8 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const User = require('../Models/User');  // ✅ FIXED: Import User Model
-
+const User = require('../Models/User');  
 const { 
     createUser, 
     userSignIn, 
@@ -39,7 +38,7 @@ router.put('/update-profile', isAuth, upload.single('profile'), updateUserProfil
 router.post('/create-admin', isAuth, isAdmin, createUser);
 router.post('/create-guide', isAuth, isAdmin, createUser);
 
-// ✅ FIXED: Fetch All Users (Admin Only)
+// ✅ Fetch All Users (Admin Only)
 router.get('/all-users', isAuth, isAdmin, async (req, res) => {
     try {
         const users = await User.find().select('-password');  // Exclude passwords
@@ -50,7 +49,7 @@ router.get('/all-users', isAuth, isAdmin, async (req, res) => {
     }
 });
 
-// Add delete user route (Admin Only)
+// ✅ Delete User (Admin Only)
 router.delete('/delete-user/:userId', isAuth, isAdmin, async (req, res) => {
     try {
         const { userId } = req.params;
@@ -86,15 +85,41 @@ router.delete('/delete-user/:userId', isAuth, isAdmin, async (req, res) => {
     }
 });
 
+// ✅ Fetch All Guides (Dynamically Updated)
+router.get('/guides', async (req, res) => {
+    try {
+        const guides = await User.find({ role: 'guide' }).select(
+            'fullname email phoneNumber address avatar experience trekCount'
+        );
 
+        if (!guides || guides.length === 0) {
+            return res.status(404).json({ success: false, message: 'No guides found' });
+        }
 
-router.get('/guides', isAuth, async (req, res) => {
-  try {
-    const guides = await User.find({ role: 'guide' }).select('fullname email avatar');
-    res.json({ success: true, guides });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
+        res.json({ success: true, guides });
+    } catch (error) {
+        console.error('❌ Error fetching guides:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+// ✅ Fetch Specific Guide Profile
+router.get('/guide/:guideId', async (req, res) => {
+    try {
+        const { guideId } = req.params;
+        const guide = await User.findOne({ _id: guideId, role: 'guide' }).select(
+            'fullname email phoneNumber address avatar experience trekCount'
+        );
+
+        if (!guide) {
+            return res.status(404).json({ success: false, message: 'Guide not found' });
+        }
+
+        res.json({ success: true, guide });
+    } catch (error) {
+        console.error('❌ Error fetching guide profile:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
 });
 
 module.exports = router;

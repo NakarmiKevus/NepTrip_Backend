@@ -10,7 +10,12 @@ const bookingSchema = new mongoose.Schema({
     peopleCount: { type: Number, required: true },
     destination: { type: String, required: true },
     date: { type: String, required: true },
-    status: { type: String, enum: ['pending', 'accepted', 'declined'], default: 'pending' },
+    status: { 
+        type: String, 
+        enum: ['pending', 'accepted', 'declined', 'completed'], 
+        default: 'pending' 
+    },
+    completedAt: { type: Date },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Booking', bookingSchema);

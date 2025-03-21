@@ -2,10 +2,8 @@ const jwt = require('jsonwebtoken');
 const User = require('../Models/User');
 const { cloudinary } = require('../Helper/imageUpload');
 
-
 exports.createDefaultUsers = async () => {
     try {
-
         const adminExists = await User.findOne({ role: 'admin' });
         if (!adminExists) {
             await User.create({
@@ -16,7 +14,6 @@ exports.createDefaultUsers = async () => {
             });
             console.log('✅ Default admin user created');
         }
-
 
         const guideExists = await User.findOne({ role: 'guide' });
         if (!guideExists) {
@@ -43,7 +40,6 @@ exports.createUser = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Email already exists' });
         }
 
-
         const requestingUser = req.user;
         if (role && (role === 'admin' || role === 'guide')) {
             if (!requestingUser || requestingUser.role !== 'admin') {
@@ -53,7 +49,6 @@ exports.createUser = async (req, res) => {
                 });
             }
         }
-
 
         const user = await User.create({ fullname, email, password, role });
         console.log('User created successfully:', user._id);
@@ -97,7 +92,6 @@ exports.userSignIn = async (req, res) => {
             role: user.role
         };
 
-
         let redirectUrl;
         switch (user.role) {
             case 'admin':
@@ -120,7 +114,6 @@ exports.userSignIn = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
-
 
 exports.uploadProfile = async (req, res) => {
     try {
@@ -161,7 +154,7 @@ exports.uploadProfile = async (req, res) => {
 
 exports.getUserProfile = async (req, res) => {
     try {
-        const user = await User.findById(req.user._id).select('-password'); // Exclude password from the response
+        const user = await User.findById(req.user._id).select('-password');
         if (!user) {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
@@ -187,7 +180,6 @@ exports.updateUserProfile = async (req, res) => {
         const user_id = req.user._id;
         const { fullname, email, phoneNumber, address } = req.body;
         
-        // Check if email is already in use by another user
         if (email) {
             const existingUser = await User.findOne({ email, _id: { $ne: user_id } });
             if (existingUser) {
@@ -198,7 +190,6 @@ exports.updateUserProfile = async (req, res) => {
             }
         }
         
-        // Prepare update object
         const updateData = {
             fullname,
             email,
@@ -206,7 +197,6 @@ exports.updateUserProfile = async (req, res) => {
             address
         };
         
-        // Handle image upload if provided
         if (req.file) {
             const result = await cloudinary.uploader.upload(req.file.path, {
                 public_id: `${user_id}_profile`,
@@ -218,7 +208,6 @@ exports.updateUserProfile = async (req, res) => {
             updateData.avatar = result.secure_url;
         }
         
-        // Update user data
         const updatedUser = await User.findByIdAndUpdate(
             user_id,
             updateData,
@@ -241,5 +230,21 @@ exports.updateUserProfile = async (req, res) => {
     } catch (error) {
         console.error('Error updating profile:', error);
         res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Fetch all guides dynamically
+exports.getAllGuides = async (req, res) => {
+    try {
+        const guides = await User.find({ role: 'guide' }).select('fullname email phoneNumber address avatar experience trekCount');
+
+        if (!guides || guides.length === 0) {
+            return res.status(404).json({ success: false, message: 'No guides found' });
+        }
+
+        res.json({ success: true, guides });
+    } catch (error) {
+        console.error('Error fetching guides:', error);
+        res.status(500).json({ success: false, message: 'Internal server error' });
     }
 };

@@ -3,18 +3,29 @@ const router = express.Router();
 const { isAuth, isUser, isGuide } = require('../middlewares/auth');
 const { 
     requestBooking, 
-    getBookingRequests, 
+    getBookingRequests,
+    getAllBookingRequests, 
     respondToBooking, 
     getUserBookings, 
     getBookingStatus,
-    getLatestBooking 
+    getLatestBooking,
+    completeTour,
+    searchBookings
 } = require('../controllers/booking');
 
+// User routes
 router.post('/request', isAuth, isUser, requestBooking);
-router.get('/requests', isAuth, isGuide, getBookingRequests);
-router.put('/respond/:bookingId', isAuth, isGuide, respondToBooking);
 router.get('/user-bookings', isAuth, getUserBookings);
-router.get('/status/:bookingId', isAuth, getBookingStatus);
 router.get('/latest-booking', isAuth, getLatestBooking);
+
+// Guide routes
+router.get('/requests', isAuth, isGuide, getBookingRequests); // Get only pending requests
+router.get('/all-requests', isAuth, isGuide, getAllBookingRequests); // Get all requests regardless of status
+router.put('/respond/:bookingId', isAuth, isGuide, respondToBooking);
+router.put('/complete/:bookingId', isAuth, isGuide, completeTour);
+router.get('/search', isAuth, isGuide, searchBookings);
+
+// Common routes
+router.get('/status/:bookingId', isAuth, getBookingStatus);
 
 module.exports = router;
