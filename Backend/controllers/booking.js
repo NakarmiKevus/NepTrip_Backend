@@ -48,7 +48,6 @@ exports.requestBooking = async (req, res) => {
         });
 
         sendNotification(guide._id, `📩 New booking request from ${fullname}`);
-
         res.status(201).json({ success: true, message: 'Booking request sent!', booking });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -181,12 +180,14 @@ exports.getBookingStatus = async (req, res) => {
     }
 };
 
-// ✅ Get latest booking for a user
 exports.getLatestBooking = async (req, res) => {
     try {
         const booking = await Booking.findOne({ user: req.user._id }).sort({ createdAt: -1 });
         if (!booking) {
-            return res.status(404).json({ success: false, message: 'No bookings found' });
+            return res.status(404).json({ 
+                success: false, 
+                message: 'No bookings found for this user'
+            });
         }
         res.json({ success: true, booking });
     } catch (error) {
@@ -221,5 +222,19 @@ exports.searchBookings = async (req, res) => {
         res.json({ success: true, bookings });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// ✅ Get all booked dates (for disabling in calendar)
+exports.getBookedDates = async (req, res) => {
+    try {
+        const bookings = await Booking.find({
+            status: { $in: ['pending', 'accepted'] }
+        }).select('date -_id');
+
+        const dates = bookings.map(b => b.date);
+        res.json({ success: true, dates });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message, dates: [] });
     }
 };
