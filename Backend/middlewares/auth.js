@@ -1,48 +1,57 @@
 const jwt = require('jsonwebtoken');
 const User = require('../Models/User');
 
-// Check if user is logged in
 exports.isAuth = async (req, res, next) => {
     try {
-        const token = req.headers.authorization?.split(' ')[1];
+        // Check if authorization header exists
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({ success: false, message: 'Unauthorized access' });
+        }
+
+        // Extract token
+        const token = authHeader.split(' ')[1];
         if (!token) {
             return res.status(401).json({ success: false, message: 'No token provided' });
         }
 
+        // Verify token
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const user = await User.findById(decoded.userId);
-        
-        if (!user) {
+        if (!decoded) {
             return res.status(401).json({ success: false, message: 'Invalid token' });
         }
 
+        // Find user by ID
+        const user = await User.findById(decoded.userId);
+        if (!user) {
+            return res.status(401).json({ success: false, message: 'User not found' });
+        }
+
+        // Add user to request object
         req.user = user;
         next();
     } catch (error) {
-        res.status(401).json({ success: false, message: 'Authentication failed' });
+        return res.status(401).json({ success: false, message: 'Authentication failed' });
     }
 };
 
-// Allow only admins
 exports.isAdmin = (req, res, next) => {
     if (req.user.role !== 'admin') {
-        return res.status(403).json({ success: false, message: 'Access denied: Admin role required' });
+        return res.status(403).json({ success: false, message: 'Access denied. Admin only.' });
     }
     next();
 };
 
-// Allow only users (people who book guides)
-exports.isUser = (req, res, next) => {
-    if (req.user.role !== 'user') {
-        return res.status(403).json({ success: false, message: 'Access denied: Only users can book a guide' });
-    }
-    next();
-};
-
-// Allow only guides (people who accept bookings)
 exports.isGuide = (req, res, next) => {
     if (req.user.role !== 'guide') {
-        return res.status(403).json({ success: false, message: 'Access denied: Only guides can manage bookings' });
+        return res.status(403).json({ success: false, message: 'Access denied. Guide only.' });
+    }
+    next();
+};
+
+exports.isUser = (req, res, next) => {
+    if (req.user.role !== 'user') {
+        return res.status(403).json({ success: false, message: 'Access denied. User only.' });
     }
     next();
 };

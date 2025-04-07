@@ -15,6 +15,25 @@ const bookingSchema = new mongoose.Schema({
         enum: ['pending', 'accepted', 'declined', 'completed'], 
         default: 'pending' 
     },
+    // Payment fields only required for bookings created after a certain date
+    paymentMethod: {
+        type: String,
+        enum: ['cash', 'online'],
+        // Only required for newer bookings
+        required: function() {
+            // If created after March 29, 2025 (or whatever date you implemented payment)
+            return this.createdAt && this.createdAt > new Date('2025-03-29T00:00:00Z');
+        }
+    },
+    paymentStatus: {
+        type: String,
+        enum: ['unpaid', 'partially_paid', 'paid'],
+        default: 'unpaid'
+    },
+    paymentAmount: {
+        type: Number,
+        default: 0
+    },
     completedAt: { type: Date },
 }, { timestamps: true });
 

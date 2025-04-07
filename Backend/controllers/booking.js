@@ -6,14 +6,33 @@ const sendNotification = (userId, message) => {
     console.log(`📢 Notification sent to ${userId}: ${message}`);
 };
 
-// ✅ Request a new booking
+// ✅ Request a new booking (Updated with payment handling)
 exports.requestBooking = async (req, res) => {
     try {
-        const { fullname, email, address, phone, peopleCount, destination, date } = req.body;
+        const { 
+            fullname, 
+            email, 
+            address, 
+            phone, 
+            peopleCount, 
+            destination, 
+            date,
+            paymentMethod,
+            paymentStatus,
+            paymentAmount,
+            advancePayment
+        } = req.body;
+        
         const userId = req.user._id;
 
-        if (!fullname || !email || !address || !phone || !peopleCount || !destination || !date) {
-            return res.status(400).json({ success: false, message: 'All fields are required' });
+        // For new bookings, require payment method
+        if (!fullname || !email || !address || !phone || !peopleCount || !destination || !date || !paymentMethod) {
+            return res.status(400).json({ success: false, message: 'All fields are required including payment method' });
+        }
+
+        // Validate payment method
+        if (!['cash', 'online'].includes(paymentMethod)) {
+            return res.status(400).json({ success: false, message: 'Invalid payment method. Choose "cash" or "online"' });
         }
 
         const guide = await User.findOne({ role: 'guide' });
@@ -34,7 +53,8 @@ exports.requestBooking = async (req, res) => {
             });
         }
 
-        const booking = await Booking.create({
+        // Create booking object with payment information
+        const bookingData = {
             user: userId,
             guide: guide._id,
             fullname,
@@ -44,10 +64,25 @@ exports.requestBooking = async (req, res) => {
             peopleCount,
             destination,
             date,
-            status: 'pending'
-        });
+            status: 'pending',
+            paymentMethod,
+            paymentStatus: paymentStatus || 'unpaid',
+            paymentAmount: paymentAmount || 0
+        };
 
-        sendNotification(guide._id, `📩 New booking request from ${fullname}`);
+        const booking = await Booking.create(bookingData);
+
+        // Format payment info for notification
+        let paymentInfo = '';
+        if (advancePayment && paymentAmount > 0) {
+            paymentInfo = ` with an advance payment of Rs.${paymentAmount}`;
+        }
+
+        sendNotification(
+            guide._id, 
+            `📩 New booking request from ${fullname}${paymentInfo}. Payment method: ${paymentMethod}`
+        );
+        
         res.status(201).json({ success: true, message: 'Booking request sent!', booking });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -105,7 +140,7 @@ exports.respondToBooking = async (req, res) => {
 
         booking.status = status;
         booking.updatedAt = new Date();
-        await booking.save();
+        await booking.save({ validateBeforeSave: false }); // Skip validation to handle old bookings
 
         sendNotification(booking.user, `✅ Your booking request has been ${status}`);
         res.json({ success: true, message: `Booking ${status}!`, booking });
@@ -114,7 +149,7 @@ exports.respondToBooking = async (req, res) => {
     }
 };
 
-// ✅ Mark booking as completed
+// ✅ Mark booking as completed - UPDATED to handle old bookings
 exports.completeTour = async (req, res) => {
     try {
         const { bookingId } = req.params;
@@ -137,9 +172,12 @@ exports.completeTour = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Only accepted bookings can be completed' });
         }
 
+        // Update status and completion date
         booking.status = 'completed';
         booking.completedAt = new Date();
-        await booking.save();
+        
+        // Skip validation to allow completing old bookings that don't have payment methods
+        await booking.save({ validateBeforeSave: false });
 
         await User.findByIdAndUpdate(guide._id, { $inc: { trekCount: 1 } });
 
@@ -236,5 +274,105 @@ exports.getBookedDates = async (req, res) => {
         res.json({ success: true, dates });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message, dates: [] });
+    }
+};
+
+// ✅ Update payment status
+exports.updatePaymentStatus = async (req, res) => {
+    try {
+        const { bookingId } = req.params;
+        const { paymentStatus, paymentAmount } = req.body;
+
+        if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+            return res.status(400).json({ success: false, message: 'Invalid booking ID format' });
+        }
+
+        if (!['paid', 'partially_paid', 'unpaid'].includes(paymentStatus)) {
+            return res.status(400).json({ success: false, message: 'Invalid payment status' });
+        }
+
+        const booking = await Booking.findById(bookingId);
+        if (!booking) {
+            return res.status(404).json({ success: false, message: 'Booking not found' });
+        }
+
+        const guide = await User.findById(req.user._id);
+        if (!guide || guide.role !== 'guide') {
+            return res.status(403).json({ success: false, message: 'Only guides can update payment status' });
+        }
+
+        // Update payment information
+        booking.paymentStatus = paymentStatus;
+        
+        // If payment amount is provided, update it
+        if (paymentAmount !== undefined) {
+            // For fully paid, calculate the total based on people count (e.g., ₹1500 per person)
+            if (paymentStatus === 'paid') {
+                booking.paymentAmount = booking.peopleCount * 1500; // Assuming ₹1500 per person
+            } else {
+                booking.paymentAmount = paymentAmount;
+            }
+        }
+
+        booking.updatedAt = new Date();
+        await booking.save({ validateBeforeSave: false }); // Skip validation to handle old bookings
+
+        // Send notification to the user
+        const paymentMessage = paymentStatus === 'paid' 
+            ? 'Your payment has been marked as fully paid' 
+            : `Your payment has been updated. Amount received: ₹${paymentAmount}`;
+            
+        sendNotification(booking.user, `💰 ${paymentMessage}`);
+        
+        res.json({ 
+            success: true, 
+            message: 'Payment status updated successfully', 
+            booking 
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// ✅ Update payment method (for legacy bookings)
+exports.updatePaymentMethod = async (req, res) => {
+    try {
+        const { bookingId } = req.params;
+        const { paymentMethod, paymentStatus } = req.body;
+
+        if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+            return res.status(400).json({ success: false, message: 'Invalid booking ID format' });
+        }
+
+        if (!['cash', 'online'].includes(paymentMethod)) {
+            return res.status(400).json({ success: false, message: 'Invalid payment method' });
+        }
+
+        const booking = await Booking.findById(bookingId);
+        if (!booking) {
+            return res.status(404).json({ success: false, message: 'Booking not found' });
+        }
+
+        const guide = await User.findById(req.user._id);
+        if (!guide || guide.role !== 'guide') {
+            return res.status(403).json({ success: false, message: 'Only guides can update booking details' });
+        }
+
+        // Update payment method and status
+        booking.paymentMethod = paymentMethod;
+        if (paymentStatus) {
+            booking.paymentStatus = paymentStatus;
+        }
+
+        booking.updatedAt = new Date();
+        await booking.save({ validateBeforeSave: false }); // Skip validation
+        
+        res.json({ 
+            success: true, 
+            message: 'Payment method updated successfully', 
+            booking 
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
     }
 };

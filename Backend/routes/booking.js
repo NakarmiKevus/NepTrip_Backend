@@ -11,7 +11,9 @@ const {
     getLatestBooking,
     completeTour,
     searchBookings,
-    getBookedDates // ✅ New controller method
+    getBookedDates,
+    updatePaymentStatus,
+    updatePaymentMethod // New controller for updating payment method
 } = require('../controllers/booking');
 
 // ✅ User routes
@@ -26,10 +28,14 @@ router.put('/respond/:bookingId', isAuth, isGuide, respondToBooking);
 router.put('/complete/:bookingId', isAuth, isGuide, completeTour);
 router.get('/search', isAuth, isGuide, searchBookings);
 
+// ✅ Payment routes
+router.put('/payment/:bookingId', isAuth, isGuide, updatePaymentStatus);
+router.put('/payment-method/:bookingId', isAuth, isGuide, updatePaymentMethod); // New route for updating payment method
+
 // ✅ Common routes
 router.get('/status/:bookingId', isAuth, getBookingStatus);
 
-// ✅ NEW: Get booked dates (for disabling in calendar)
+// ✅ Get booked dates (for disabling in calendar)
 router.get('/booked-dates', isAuth, isUser, getBookedDates);
 
 module.exports = router;
