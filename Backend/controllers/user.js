@@ -233,10 +233,44 @@ exports.updateUserProfile = async (req, res) => {
     }
 };
 
+// ✅ New function for admin to update guide-specific details
+exports.updateGuideDetails = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { experience, language, trekCount } = req.body;
+        
+        // Check if the guide exists
+        const guide = await User.findOne({ _id: userId, role: 'guide' });
+        if (!guide) {
+            return res.status(404).json({ success: false, message: 'Guide not found' });
+        }
+        
+        // Only update guide-specific fields
+        const updatedGuide = await User.findByIdAndUpdate(
+            userId,
+            { 
+                experience,
+                language,
+                trekCount: trekCount ? parseInt(trekCount) : 0
+            },
+            { new: true }
+        ).select('-password');
+        
+        res.json({
+            success: true,
+            message: 'Guide details updated successfully',
+            guide: updatedGuide
+        });
+    } catch (error) {
+        console.error('❌ Error updating guide details:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // Fetch all guides dynamically
 exports.getAllGuides = async (req, res) => {
     try {
-        const guides = await User.find({ role: 'guide' }).select('fullname email phoneNumber address avatar experience trekCount');
+        const guides = await User.find({ role: 'guide' }).select('fullname email phoneNumber address avatar experience trekCount language');
 
         if (!guides || guides.length === 0) {
             return res.status(404).json({ success: false, message: 'No guides found' });
@@ -247,4 +281,40 @@ exports.getAllGuides = async (req, res) => {
         console.error('Error fetching guides:', error);
         res.status(500).json({ success: false, message: 'Internal server error' });
     }
+};
+
+const { check, validationResult } = require('express-validator');
+
+exports.validateUserSignUp = [
+    check('fullname')
+        .trim()
+        .notEmpty().withMessage('Name is required')
+        .isLength({ min: 3, max: 20 }).withMessage('Name must be 3-20 characters'),
+    check('email')
+        .normalizeEmail()
+        .isEmail().withMessage('Invalid email address'),
+    check('password')
+        .trim()
+        .notEmpty().withMessage('Password is required')
+        .isLength({ min: 5, max: 20 }).withMessage('Password must be 5-20 characters'),
+    check('confirmPassword')
+        .trim()
+        .notEmpty()
+        .custom((value, { req }) => {
+            if (value !== req.body.password) {
+                throw new Error('Passwords must match');
+            }
+            return true;
+        })
+];
+
+exports.validateUserSignIn = [
+    check('email').trim().isEmail().withMessage('Invalid email address'),
+    check('password').trim().notEmpty().withMessage('Password is required')
+];
+
+exports.userValidation = (req, res, next) => {
+    const errors = validationResult(req);
+    if (errors.isEmpty()) return next();
+    res.status(400).json({ success: false, message: errors.array()[0].msg });
 };

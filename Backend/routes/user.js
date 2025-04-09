@@ -7,7 +7,8 @@ const {
     userSignIn, 
     uploadProfile, 
     getUserProfile, 
-    updateUserProfile 
+    updateUserProfile,
+    updateGuideDetails
 } = require('../controllers/user');
 
 const { isAuth, isAdmin, isGuide } = require('../middlewares/auth');
@@ -37,6 +38,7 @@ router.put('/update-profile', isAuth, upload.single('profile'), updateUserProfil
 // Admin-only Routes
 router.post('/create-admin', isAuth, isAdmin, createUser);
 router.post('/create-guide', isAuth, isAdmin, createUser);
+router.put('/update-guide/:userId', isAuth, isAdmin, updateGuideDetails);
 
 // ✅ Fetch All Users (Admin Only)
 router.get('/all-users', isAuth, isAdmin, async (req, res) => {
@@ -89,7 +91,7 @@ router.delete('/delete-user/:userId', isAuth, isAdmin, async (req, res) => {
 router.get('/guides', async (req, res) => {
     try {
         const guides = await User.find({ role: 'guide' }).select(
-            'fullname email phoneNumber address avatar experience trekCount'
+            'fullname email phoneNumber address avatar experience language trekCount'
         );
 
         if (!guides || guides.length === 0) {
@@ -108,7 +110,7 @@ router.get('/guide/:guideId', async (req, res) => {
     try {
         const { guideId } = req.params;
         const guide = await User.findOne({ _id: guideId, role: 'guide' }).select(
-            'fullname email phoneNumber address avatar experience trekCount'
+            'fullname email phoneNumber address avatar experience language trekCount'
         );
 
         if (!guide) {
