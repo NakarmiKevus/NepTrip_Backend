@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const User = require('../Models/User');  
+const { cloudinary } = require('../Helper/imageUpload');
 const { 
     createUser, 
     userSignIn, 
@@ -39,6 +40,47 @@ router.put('/update-profile', isAuth, upload.single('profile'), updateUserProfil
 router.post('/create-admin', isAuth, isAdmin, createUser);
 router.post('/create-guide', isAuth, isAdmin, createUser);
 router.put('/update-guide/:userId', isAuth, isAdmin, updateGuideDetails);
+
+// Admin route for uploading guide profile picture
+router.post('/upload-guide-profile/:userId', isAuth, isAdmin, upload.single('profile'), async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'No file uploaded' });
+        }
+        
+        // Check if guide exists
+        const guide = await User.findOne({ _id: userId, role: 'guide' });
+        if (!guide) {
+            return res.status(404).json({ success: false, message: 'Guide not found' });
+        }
+        
+        const result = await cloudinary.uploader.upload(req.file.path, {
+            public_id: `${userId}_profile`,
+            width: 500,
+            height: 500,
+            crop: 'fill'
+        });
+        
+        // Update guide with new avatar
+        const updatedGuide = await User.findByIdAndUpdate(
+            userId,
+            { avatar: result.secure_url },
+            { new: true }
+        ).select('-password');
+        
+        res.json({
+            success: true,
+            message: 'Guide profile picture updated successfully',
+            imageUrl: result.secure_url,
+            guide: updatedGuide
+        });
+    } catch (error) {
+        console.error('❌ Error uploading guide profile picture:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
 
 // ✅ Fetch All Users (Admin Only)
 router.get('/all-users', isAuth, isAdmin, async (req, res) => {
