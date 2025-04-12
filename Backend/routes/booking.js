@@ -12,30 +12,50 @@ const {
     completeTour,
     searchBookings,
     getBookedDates,
+    getAvailableGuides,
     updatePaymentStatus,
-    updatePaymentMethod // New controller for updating payment method
+    updatePaymentMethod
 } = require('../controllers/booking');
 
-// ✅ User routes
+// user can request a booking
 router.post('/request', isAuth, isUser, requestBooking);
+
+// user can get their bookings
 router.get('/user-bookings', isAuth, getUserBookings);
+
+// user can get their latest booking
 router.get('/latest-booking', isAuth, getLatestBooking);
 
-// ✅ Guide routes
-router.get('/requests', isAuth, isGuide, getBookingRequests); // Get only pending requests
-router.get('/all-requests', isAuth, isGuide, getAllBookingRequests); // Get all requests
+// guide can get pending booking requests
+router.get('/requests', isAuth, isGuide, getBookingRequests);
+
+// guide can get all booking requests
+router.get('/all-requests', isAuth, isGuide, getAllBookingRequests);
+
+// guide can respond to a booking request
 router.put('/respond/:bookingId', isAuth, isGuide, respondToBooking);
+
+// guide can mark a tour as complete
 router.put('/complete/:bookingId', isAuth, isGuide, completeTour);
+
+// guide can search bookings
 router.get('/search', isAuth, isGuide, searchBookings);
 
-// ✅ Payment routes
+// guide can update payment status
 router.put('/payment/:bookingId', isAuth, isGuide, updatePaymentStatus);
-router.put('/payment-method/:bookingId', isAuth, isGuide, updatePaymentMethod); // New route for updating payment method
 
-// ✅ Common routes
+// guide can update payment method
+router.put('/payment-method/:bookingId', isAuth, isGuide, updatePaymentMethod);
+
+// anyone can get the status of a booking
 router.get('/status/:bookingId', isAuth, getBookingStatus);
 
-// ✅ Get booked dates (for disabling in calendar)
-router.get('/booked-dates', isAuth, isUser, getBookedDates);
+// anyone can get booked dates
+router.get('/booked-dates', isAuth, getBookedDates);
 
+// user can get available guides for a specific date
+router.get('/available-guides', isAuth, isUser, getAvailableGuides);
+
+
+module.exports = router;
 module.exports = router;

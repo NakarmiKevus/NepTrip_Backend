@@ -20,14 +20,15 @@ exports.requestBooking = async (req, res) => {
             paymentMethod,
             paymentStatus,
             paymentAmount,
-            advancePayment
+            advancePayment,
+            guide: guideId // Get the guide ID from the request
         } = req.body;
         
         const userId = req.user._id;
 
         // For new bookings, require payment method
-        if (!fullname || !email || !address || !phone || !peopleCount || !destination || !date || !paymentMethod) {
-            return res.status(400).json({ success: false, message: 'All fields are required including payment method' });
+        if (!fullname || !email || !address || !phone || !peopleCount || !destination || !date || !paymentMethod || !guideId) {
+            return res.status(400).json({ success: false, message: 'All fields are required including payment method and guide' });
         }
 
         // Validate payment method
@@ -35,7 +36,8 @@ exports.requestBooking = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Invalid payment method. Choose "cash" or "online"' });
         }
 
-        const guide = await User.findOne({ role: 'guide' });
+        // Check if the guide exists
+        const guide = await User.findOne({ _id: guideId, role: 'guide' });
         if (!guide) {
             return res.status(404).json({ success: false, message: 'Guide not found' });
         }
@@ -53,10 +55,24 @@ exports.requestBooking = async (req, res) => {
             });
         }
 
+        // ✅ Check if the selected guide is already booked for this date
+        const guideAlreadyBooked = await Booking.findOne({
+            guide: guideId,
+            date: date,
+            status: { $in: ['pending', 'accepted'] }
+        });
+
+        if (guideAlreadyBooked) {
+            return res.status(400).json({
+                success: false,
+                message: 'This guide is already booked for the selected date. Please choose a different date or guide.'
+            });
+        }
+
         // Create booking object with payment information
         const bookingData = {
             user: userId,
-            guide: guide._id,
+            guide: guideId,
             fullname,
             email,
             address,
@@ -149,7 +165,7 @@ exports.respondToBooking = async (req, res) => {
     }
 };
 
-// ✅ Mark booking as completed - UPDATED to handle old bookings
+// ✅ Mark booking as completed - UPDATED with proper notification message
 exports.completeTour = async (req, res) => {
     try {
         const { bookingId } = req.params;
@@ -181,7 +197,12 @@ exports.completeTour = async (req, res) => {
 
         await User.findByIdAndUpdate(guide._id, { $inc: { trekCount: 1 } });
 
-        sendNotification(booking.user, '✅ Your tour has been marked as completed!');
+        // Updated notification message to clearly indicate completion
+        sendNotification(
+            booking.user, 
+            '✅ Your trek has been marked as completed by the guide! Thank you for choosing our service.'
+        );
+        
         res.json({ success: true, message: 'Tour completed successfully', booking });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -263,10 +284,24 @@ exports.searchBookings = async (req, res) => {
     }
 };
 
-// ✅ Get all booked dates (for disabling in calendar)
+// ✅ Get all booked dates FOR A SPECIFIC GUIDE (Updated to filter by guide)
 exports.getBookedDates = async (req, res) => {
     try {
+        // Get the guide ID from the query params or use the current user's ID if it's a guide
+        const guideId = req.query.guideId || (req.user.role === 'guide' ? req.user._id : null);
+
+        // If no guide ID is provided and the current user is not a guide, return an error
+        if (!guideId) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Guide ID is required',
+                dates: [] 
+            });
+        }
+
+        // Find all bookings for the specified guide that are pending or accepted
         const bookings = await Booking.find({
+            guide: guideId,
             status: { $in: ['pending', 'accepted'] }
         }).select('date -_id');
 
@@ -274,6 +309,43 @@ exports.getBookedDates = async (req, res) => {
         res.json({ success: true, dates });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message, dates: [] });
+    }
+};
+
+// ✅ Get available guides for a specific date
+exports.getAvailableGuides = async (req, res) => {
+    try {
+        const { date } = req.query;
+        
+        if (!date) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Date is required' 
+            });
+        }
+        
+        // Find all guides who are already booked on this date
+        const bookedGuides = await Booking.find({
+            date: date,
+            status: { $in: ['pending', 'accepted'] }
+        }).select('guide -_id');
+        
+        // Extract the guide IDs
+        const bookedGuideIds = bookedGuides.map(booking => booking.guide.toString());
+        
+        // Find all guides who are not in the booked list
+        const availableGuides = await User.find({
+            role: 'guide',
+            _id: { $nin: bookedGuideIds }
+        }).select('_id fullname avatar trekCount experience language');
+        
+        res.json({ 
+            success: true, 
+            guides: availableGuides,
+            totalAvailable: availableGuides.length
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
