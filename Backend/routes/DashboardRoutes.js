@@ -1,15 +1,30 @@
 const express = require('express');
 const router = express.Router();
 const { isAuth, isAdmin } = require('../middlewares/auth');
-const { addTrekkingPlace, getAllTrekkingPlaces, getTrekkingPlaceById } = require('../controllers/DashboardController');
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
 
-// Admin can add a new trekking place  
-router.post('/', isAuth, isAdmin, addTrekkingPlace);
+const {
+  addTrekkingPlace,
+  getAllTrekkingPlaces,
+  getTrekkingPlaceById,
+  updateTrekkingPlace,
+  deleteTrekkingPlace
+} = require('../controllers/DashboardController');
 
-// Get all trekking places  
+// ✅ Admin adds a new trekking place
+router.post('/', isAuth, isAdmin, upload.array('images', 10), addTrekkingPlace);
+
+// ✅ Get all trekking places
 router.get('/', getAllTrekkingPlaces);
 
-// Get details of a specific trekking place  
+// ✅ Get a single trekking place by ID
 router.get('/:id', getTrekkingPlaceById);
+
+// ✅ Admin updates trekking place by ID
+router.put('/:id', isAuth, isAdmin, updateTrekkingPlace);
+
+// ✅ Admin deletes a trekking place by ID
+router.delete('/:id', isAuth, isAdmin, deleteTrekkingPlace);
 
 module.exports = router;
