@@ -1,7 +1,7 @@
 const Trekking = require('../Models/TrekkingModel');
 const uploadDashboardImages = require('../Helper/dashboardImages');
 
-// ✅ Add a new trekking place
+// ✅ Add a new trekking place (with images)
 exports.addTrekkingPlace = async (req, res) => {
   try {
     const {
@@ -16,9 +16,15 @@ exports.addTrekkingPlace = async (req, res) => {
       eco_cultural_info
     } = req.body;
 
-    const gearChecklist = req.body['gear_checklist[]'];
-    const gearArray = Array.isArray(gearChecklist) ? gearChecklist : gearChecklist ? [gearChecklist] : [];
+    // ✅ Accept both gear_checklist[] and gear_checklist
+    const rawGearChecklist = req.body['gear_checklist[]'] || req.body.gear_checklist;
+    const gearArray = Array.isArray(rawGearChecklist)
+      ? rawGearChecklist
+      : rawGearChecklist
+      ? [rawGearChecklist]
+      : [];
 
+    // ✅ Validate required fields
     if (
       !name || !location || !altitude || !rating || !review ||
       !distance_from_user || !time_to_complete || !difficulty_level ||
@@ -27,15 +33,18 @@ exports.addTrekkingPlace = async (req, res) => {
       return res.status(400).json({ success: false, message: "All fields are required!" });
     }
 
+    // ✅ Validate rating
     const ratingValue = parseFloat(rating);
     if (isNaN(ratingValue) || ratingValue < 1 || ratingValue > 5) {
       return res.status(400).json({ success: false, message: "Rating must be between 1 and 5" });
     }
 
+    // ✅ Validate images
     if (!req.files || req.files.length < 3) {
       return res.status(400).json({ success: false, message: "Please upload at least 3 images." });
     }
 
+    // ✅ Upload images
     const imageUrls = await uploadDashboardImages(req.files);
 
     const newTrekking = new Trekking({
@@ -70,7 +79,7 @@ exports.getAllTrekkingPlaces = async (req, res) => {
   }
 };
 
-// ✅ Get trekking place by ID
+// ✅ Get one trekking place by ID
 exports.getTrekkingPlaceById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -88,6 +97,7 @@ exports.getTrekkingPlaceById = async (req, res) => {
 exports.updateTrekkingPlace = async (req, res) => {
   try {
     const { id } = req.params;
+
     const {
       name,
       location,
@@ -97,9 +107,15 @@ exports.updateTrekkingPlace = async (req, res) => {
       distance_from_user,
       time_to_complete,
       difficulty_level,
-      eco_cultural_info,
-      gear_checklist
+      eco_cultural_info
     } = req.body;
+
+    const rawGearChecklist = req.body['gear_checklist[]'] || req.body.gear_checklist;
+    const gearArray = Array.isArray(rawGearChecklist)
+      ? rawGearChecklist
+      : rawGearChecklist
+      ? [rawGearChecklist]
+      : [];
 
     const trek = await Trekking.findById(id);
     if (!trek) {
@@ -115,9 +131,7 @@ exports.updateTrekkingPlace = async (req, res) => {
     trek.time_to_complete = time_to_complete || trek.time_to_complete;
     trek.difficulty_level = difficulty_level || trek.difficulty_level;
     trek.eco_cultural_info = eco_cultural_info || trek.eco_cultural_info;
-    trek.gear_checklist = Array.isArray(gear_checklist)
-      ? gear_checklist
-      : gear_checklist ? [gear_checklist] : trek.gear_checklist;
+    trek.gear_checklist = gearArray.length > 0 ? gearArray : trek.gear_checklist;
 
     await trek.save();
     res.json({ success: true, message: "Trekking place updated!", trekking: trek });

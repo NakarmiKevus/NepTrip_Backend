@@ -5,11 +5,11 @@ const uploadDashboardImages = async (files) => {
   const urls = [];
 
   for (const file of files) {
-    const result = await cloudinary.uploader.upload(file.path, {
-      folder: 'trekking_images'
+    const base64 = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+    const result = await cloudinary.uploader.upload(base64, {
+      folder: 'trekking_images',
     });
     urls.push(result.secure_url);
-    fs.unlinkSync(file.path); // delete local temp file
   }
 
   return urls;
