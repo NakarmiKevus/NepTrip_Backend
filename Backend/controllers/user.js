@@ -62,6 +62,7 @@ exports.userSignIn = async (req, res) => {
             fullname: user.fullname,
             email: user.email,
             avatar: user.avatar || '',
+            qrCode: user.qrCode || '',
             phoneNumber: user.phoneNumber || '',
             address: user.address || '',
             role: user.role
@@ -101,7 +102,41 @@ exports.uploadProfile = async (req, res) => {
     }
 };
 
-// ✅ Get current user profile (preferred version)
+// ✅ Upload guide QR code
+exports.uploadGuideQrCode = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        if (!req.file) return res.status(400).json({ success: false, message: 'No QR image uploaded' });
+
+        const guide = await User.findOne({ _id: userId, role: 'guide' });
+        if (!guide) return res.status(404).json({ success: false, message: 'Guide not found' });
+
+        const result = await cloudinary.uploader.upload(req.file.path, {
+            public_id: `${userId}_qr`,
+            width: 400,
+            height: 400,
+            crop: 'fit'
+        });
+
+        const updatedGuide = await User.findByIdAndUpdate(
+            userId,
+            { qrCode: result.secure_url },
+            { new: true }
+        ).select('-password');
+
+        res.json({
+            success: true,
+            message: 'QR code uploaded successfully',
+            qrCodeUrl: result.secure_url,
+            guide: updatedGuide
+        });
+    } catch (error) {
+        console.error('❌ Error uploading guide QR code:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+};
+
+// ✅ Get current user profile
 exports.getUserProfile = async (req, res) => {
     try {
         const user = await User.findById(req.user._id).select('-password');
@@ -113,6 +148,7 @@ exports.getUserProfile = async (req, res) => {
                 fullname: user.fullname,
                 email: user.email,
                 avatar: user.avatar || '',
+                qrCode: user.qrCode || '',
                 phoneNumber: user.phoneNumber || '',
                 address: user.address || '',
                 role: user.role
@@ -154,6 +190,7 @@ exports.updateUserProfile = async (req, res) => {
                 fullname: updatedUser.fullname,
                 email: updatedUser.email,
                 avatar: updatedUser.avatar || '',
+                qrCode: updatedUser.qrCode || '',
                 phoneNumber: updatedUser.phoneNumber || '',
                 address: updatedUser.address || '',
                 role: updatedUser.role
@@ -164,7 +201,7 @@ exports.updateUserProfile = async (req, res) => {
     }
 };
 
-// ✅ Update guide-specific fields (admin only)
+// ✅ Update guide details (admin only)
 exports.updateGuideDetails = async (req, res) => {
     try {
         const { userId } = req.params;
@@ -188,12 +225,39 @@ exports.updateGuideDetails = async (req, res) => {
 // ✅ Fetch all guides
 exports.getAllGuides = async (req, res) => {
     try {
-        const guides = await User.find({ role: 'guide' }).select('fullname email phoneNumber address avatar experience trekCount language');
+        const guides = await User.find({ role: 'guide' }).select('fullname email phoneNumber address avatar qrCode experience trekCount language');
         if (!guides.length) return res.status(404).json({ success: false, message: 'No guides found' });
         res.json({ success: true, guides });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Internal server error' });
     }
+};
+
+// ✅ Delete guide and handle affected bookings
+exports.deleteGuide = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Step 1: Check if guide exists
+    const guide = await User.findOne({ _id: userId, role: 'guide' });
+    if (!guide) {
+      return res.status(404).json({ success: false, message: 'Guide not found' });
+    }
+
+    // Step 2: Delete the guide
+    await User.findByIdAndDelete(userId);
+
+    // Step 3: Update related bookings (decline them)
+    const Booking = require('../Models/Booking'); // Import if not already
+    await Booking.updateMany(
+      { guide: userId, status: { $in: ['pending', 'accepted'] } },
+      { $set: { status: 'declined', updatedAt: new Date() } }
+    );
+
+    res.json({ success: true, message: 'Guide and associated bookings updated successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 // ✅ Validation middleware

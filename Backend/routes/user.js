@@ -11,7 +11,9 @@ const {
   uploadProfile,
   getUserProfile,
   updateUserProfile,
-  updateGuideDetails
+  updateGuideDetails,
+  uploadGuideQrCode, // ✅ New controller method
+  deleteGuide // ✅ Import the deleteGuide controller
 } = require('../controllers/user');
 
 const { isAuth, isAdmin } = require('../middlewares/auth');
@@ -39,6 +41,9 @@ router.put('/update-profile', isAuth, upload.single('profile'), updateUserProfil
 router.post('/create-admin', isAuth, isAdmin, createUser);
 router.post('/create-guide', isAuth, isAdmin, createUser);
 router.put('/update-guide/:userId', isAuth, isAdmin, updateGuideDetails);
+
+// ✅ Delete Guide (Admin Only)
+router.delete('/delete-guide/:userId', isAuth, isAdmin, deleteGuide); // ✅ Add this route
 
 // ✅ Upload Guide Profile Picture (Admin Only)
 router.post('/upload-guide-profile/:userId', isAuth, isAdmin, upload.single('profile'), async (req, res) => {
@@ -73,6 +78,9 @@ router.post('/upload-guide-profile/:userId', isAuth, isAdmin, upload.single('pro
     res.status(500).json({ success: false, message: 'Internal Server Error' });
   }
 });
+
+// ✅ NEW: Upload Guide QR Code (Admin Only)
+router.post('/upload-guide-qr/:userId', isAuth, isAdmin, upload.single('qr'), uploadGuideQrCode);
 
 // ✅ Fetch All Users (Admin Only)
 router.get('/all-users', isAuth, isAdmin, async (req, res) => {
@@ -110,7 +118,6 @@ router.delete('/delete-user/:userId', isAuth, isAdmin, async (req, res) => {
       const affected = await Booking.find({ guide: user._id, status: 'declined' });
       affected.forEach(booking => {
         console.log(`📢 Notify user ${booking.user}: Booking declined due to guide deletion.`);
-        // Optionally: sendNotification(booking.user, 'Your booking was cancelled due to guide removal');
       });
 
       console.log(`✅ Declined ${result.modifiedCount} bookings related to guide ${user.fullname}`);
@@ -130,7 +137,7 @@ router.delete('/delete-user/:userId', isAuth, isAdmin, async (req, res) => {
 router.get('/guides', async (req, res) => {
   try {
     const guides = await User.find({ role: 'guide' }).select(
-      'fullname email phoneNumber address avatar experience language trekCount'
+      'fullname email phoneNumber address avatar qrCode experience language trekCount'
     );
     if (!guides.length) return res.status(404).json({ success: false, message: 'No guides found' });
     res.json({ success: true, guides });
@@ -145,7 +152,7 @@ router.get('/guide/:guideId', async (req, res) => {
   try {
     const { guideId } = req.params;
     const guide = await User.findOne({ _id: guideId, role: 'guide' }).select(
-      'fullname email phoneNumber address avatar experience language trekCount'
+      'fullname email phoneNumber address avatar qrCode experience language trekCount'
     );
 
     if (!guide) return res.status(404).json({ success: false, message: 'Guide not found' });

@@ -241,13 +241,17 @@ exports.getBookingStatus = async (req, res) => {
 
 exports.getLatestBooking = async (req, res) => {
     try {
-        const booking = await Booking.findOne({ user: req.user._id }).sort({ createdAt: -1 });
+        const booking = await Booking.findOne({ 
+            user: req.user._id, 
+            status: { $in: ['pending', 'accepted'] } // Only return active bookings
+        })
+        .sort({ createdAt: -1 })
+        .populate('guide', 'fullname email qrCode');
+
         if (!booking) {
-            return res.status(404).json({ 
-                success: false, 
-                message: 'No bookings found for this user'
-            });
+            return res.status(404).json({ success: false, message: 'No active bookings found' });
         }
+
         res.json({ success: true, booking });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -448,3 +452,64 @@ exports.updatePaymentMethod = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+// Mark user payment as confirmed
+exports.markUserPaymentConfirmed = async (req, res) => {
+  try {
+    const bookingId = req.params.bookingId;
+
+    if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+      return res.status(400).json({ success: false, message: 'Invalid booking ID format' });
+    }
+
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    // Confirm payment from user side
+    booking.userPaymentConfirmed = true;
+    booking.paymentStatus = 'paid';
+    booking.updatedAt = new Date();
+
+    await booking.save({ validateBeforeSave: false });
+
+    res.json({ success: true, message: 'User payment confirmed successfully', booking });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.markGuidePaymentConfirmed = async (req, res) => {
+    try {
+      const { bookingId } = req.params;
+  
+      if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+        return res.status(400).json({ success: false, message: 'Invalid booking ID format' });
+      }
+  
+      const booking = await Booking.findById(bookingId);
+      if (!booking) {
+        return res.status(404).json({ success: false, message: 'Booking not found' });
+      }
+  
+      // Only the assigned guide can confirm
+      if (booking.guide.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ success: false, message: 'Not authorized to confirm this booking' });
+      }
+  
+      booking.guidePaymentConfirmed = true;
+      booking.updatedAt = new Date();
+  
+      // If both user and guide have confirmed payment, update status
+      if (booking.userPaymentConfirmed) {
+        booking.paymentStatus = 'paid';
+      }
+  
+      await booking.save({ validateBeforeSave: false });
+  
+      res.json({ success: true, message: 'Guide payment confirmed successfully', booking });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  };
