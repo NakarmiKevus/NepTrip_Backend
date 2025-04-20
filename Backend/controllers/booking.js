@@ -228,7 +228,7 @@ exports.getBookingStatus = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Invalid booking ID format' });
         }
 
-        const booking = await Booking.findById(bookingId).populate('guide', 'fullname email');
+        const booking = await Booking.findById(bookingId).populate('guide', 'fullname email qrCode'); // ✅ Add qrCode here
         if (!booking) {
             return res.status(404).json({ success: false, message: 'Booking not found' });
         }
@@ -241,12 +241,12 @@ exports.getBookingStatus = async (req, res) => {
 
 exports.getLatestBooking = async (req, res) => {
     try {
-        const booking = await Booking.findOne({ 
-            user: req.user._id, 
-            status: { $in: ['pending', 'accepted'] } // Only return active bookings
+        const booking = await Booking.findOne({
+            user: req.user._id,
+            status: { $in: ['pending', 'accepted'] }
         })
         .sort({ createdAt: -1 })
-        .populate('guide', 'fullname email qrCode');
+        .populate('guide', 'fullname email qrCode'); // ✅ Add qrCode here too
 
         if (!booking) {
             return res.status(404).json({ success: false, message: 'No active bookings found' });
@@ -457,6 +457,7 @@ exports.updatePaymentMethod = async (req, res) => {
 exports.markUserPaymentConfirmed = async (req, res) => {
   try {
     const bookingId = req.params.bookingId;
+    const { rating, review } = req.body; // Get rating and review from request
 
     if (!mongoose.Types.ObjectId.isValid(bookingId)) {
       return res.status(400).json({ success: false, message: 'Invalid booking ID format' });
@@ -472,9 +473,20 @@ exports.markUserPaymentConfirmed = async (req, res) => {
     booking.paymentStatus = 'paid';
     booking.updatedAt = new Date();
 
+    // Validate rating
+    if (rating !== undefined) {
+      const ratingValue = parseFloat(rating);
+      if (isNaN(ratingValue) || ratingValue < 0 || ratingValue > 5) {
+        return res.status(400).json({ success: false, message: 'Rating must be between 0 and 5' });
+      }
+      booking.rating = ratingValue;
+    }
+    
+    if (review) booking.review = review;
+
     await booking.save({ validateBeforeSave: false });
 
-    res.json({ success: true, message: 'User payment confirmed successfully', booking });
+    res.json({ success: true, message: 'User payment and review submitted successfully', booking });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -512,4 +524,68 @@ exports.markGuidePaymentConfirmed = async (req, res) => {
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
     }
-  };
+};
+
+// Debug to see all bookings with ratings
+exports.debugAllBookings = async (req, res) => {
+  try {
+    const allBookings = await Booking.find().select('_id guide user rating paymentStatus');
+    res.json({ success: true, count: allBookings.length, bookings: allBookings });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Debug to test setting a rating directly
+exports.setTestRating = async (req, res) => {
+  try {
+    const { bookingId, rating } = req.body;
+    
+    if (!bookingId || rating === undefined) {
+      return res.status(400).json({ success: false, message: 'BookingId and rating are required' });
+    }
+    
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+    
+    booking.rating = parseFloat(rating);
+    await booking.save();
+    
+    console.log(`Test rating saved: ${booking.rating} for booking: ${bookingId}`);
+    
+    res.json({ success: true, message: 'Test rating saved', booking });
+  } catch (error) {
+    console.error('Error in test rating:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Debug to see all bookings with ratings
+exports.debugGetRatings = async (req, res) => {
+  try {
+    const bookingsWithRatings = await Booking.find({
+      rating: { $exists: true, $ne: null }
+    }).select('guide rating user');
+    
+    // Group ratings by guide
+    const guideRatings = {};
+    bookingsWithRatings.forEach(booking => {
+      const guideId = booking.guide.toString();
+      if (!guideRatings[guideId]) {
+        guideRatings[guideId] = [];
+      }
+      guideRatings[guideId].push(booking.rating);
+    });
+    
+    res.json({ 
+      success: true, 
+      count: bookingsWithRatings.length,
+      bookings: bookingsWithRatings,
+      guideRatings: guideRatings
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};

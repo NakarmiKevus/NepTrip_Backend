@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../Models/User');
 const { cloudinary } = require('../Helper/imageUpload');
 const { check, validationResult } = require('express-validator');
+const Booking = require('../Models/Booking'); // Ensure this is imported
 
 // ✅ Create default admin and guide
 exports.createDefaultUsers = async () => {
@@ -225,9 +226,30 @@ exports.updateGuideDetails = async (req, res) => {
 // ✅ Fetch all guides
 exports.getAllGuides = async (req, res) => {
     try {
-        const guides = await User.find({ role: 'guide' }).select('fullname email phoneNumber address avatar qrCode experience trekCount language');
-        if (!guides.length) return res.status(404).json({ success: false, message: 'No guides found' });
-        res.json({ success: true, guides });
+        const guides = await User.find({ role: 'guide' })
+            .select('fullname email phoneNumber address avatar qrCode experience trekCount language');
+
+        const enrichedGuides = await Promise.all(
+            guides.map(async (guide) => {
+                const reviews = await Booking.find({
+                    guide: guide._id,
+                    rating: { $exists: true, $ne: null }
+                }).select('rating');
+
+                const totalReviews = reviews.length;
+                const averageRating = totalReviews > 0
+                    ? Number((reviews.reduce((sum, b) => sum + b.rating, 0) / totalReviews).toFixed(1))
+                    : 0;
+
+                return {
+                    ...guide.toObject(),
+                    averageRating,
+                    totalReviews
+                };
+            })
+        );
+
+        res.json({ success: true, guides: enrichedGuides });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Internal server error' });
     }

@@ -35,6 +35,17 @@ const bookingSchema = new mongoose.Schema({
     default: 0
   },
 
+  // ✅ Add here
+  rating: {
+    type: Number,
+    min: 0,
+    max: 5
+  },
+  review: {
+    type: String,
+    maxlength: 300
+  },
+
   // ✅ New fields to track confirmation from both sides
   userPaymentConfirmed: {
     type: Boolean,
